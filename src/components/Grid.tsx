@@ -44,7 +44,6 @@ export const Grid: React.FC<GridProps> = ({ grid, currentPath, onDotClick }) => 
     const updateDimensions = () => {
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
-      const isSmallScreen = screenWidth < 640; // Tailwind's sm breakpoint
       
       // Calculate the maximum available space while maintaining margins
       const maxAvailableWidth = Math.min(screenWidth * 0.9, 480); // 90% of width on mobile, max 480px on desktop
