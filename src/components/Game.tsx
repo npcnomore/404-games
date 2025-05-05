@@ -141,6 +141,7 @@ export const Game: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showAd, setShowAd] = useState(false);
 
   useEffect(() => {
     // Clear any stale completion state
@@ -172,7 +173,7 @@ export const Game: React.FC = () => {
     if (isComplete) {
       const today = new Date().toISOString().split('T')[0];
       localStorage.setItem(`puzzle_completed_${today}`, 'true');
-      setShowSuccess(true);
+      setShowAd(true); // Show ad first
     }
 
     setGameState(prev => ({
@@ -182,6 +183,11 @@ export const Game: React.FC = () => {
     }));
   };
 
+  const handleAdClose = () => {
+    setShowAd(false);
+    setShowSuccess(true); // Show success message after ad is closed
+  };
+
   const handleReset = () => {
     // Generate a new seed for each reset to ensure different number positions
     const seed = `${Date.now()}-${Math.random()}`;
@@ -189,6 +195,7 @@ export const Game: React.FC = () => {
     const newPuzzle = generatePuzzle(new Date(), config);
     setGameState(newPuzzle);
     setShowSuccess(false);
+    setShowAd(false);
     
     // Clear completion state
     const today = new Date().toISOString().split('T')[0];
@@ -279,6 +286,16 @@ export const Game: React.FC = () => {
             </motion.button>
           </div>
 
+          <Instructions
+            isOpen={showInstructions}
+            onClose={() => setShowInstructions(false)}
+          />
+
+          <AdUnit
+            isVisible={showAd}
+            onClose={handleAdClose}
+          />
+
           <AnimatePresence>
             {showSuccess && (
               <motion.div
@@ -313,15 +330,12 @@ export const Game: React.FC = () => {
             onClose={() => setShowConfig(false)}
           />
         )}
-
-        <Instructions
-          isOpen={showInstructions}
-          onClose={() => setShowInstructions(false)}
-        />
       </div>
-
       {/* Ad section - fixed height */}
-      <AdUnit />
+      <AdUnit 
+        isVisible={showAd}
+        onClose={handleAdClose}
+      />
     </div>
   );
-}; 
+};
