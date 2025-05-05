@@ -1,8 +1,43 @@
 import seedrandom from 'seedrandom';
-import { Point, GameState } from '../types';
+import { Point, GameState, GameConfig } from '../types';
 
-const GRID_SIZE = 5;
-const NUMBERED_DOTS_COUNT = 5;
+const DEFAULT_GRID_SIZE = 5;
+const DEFAULT_NUMBERED_DOTS_COUNT = 5;
+const MIN_GRID_SIZE = 3;
+const MIN_DOTS_COUNT = 2;
+const MAX_GRID_SIZE = 9;
+const MAX_DOTS_COUNT = 15;
+
+// Difficulty settings affect the spacing between numbered dots
+const DIFFICULTY_SETTINGS = {
+  easy: { minDistance: 1 },
+  medium: { minDistance: 2 },
+  hard: { minDistance: 3 }
+};
+
+export const validateConfig = (config?: GameConfig): GameConfig => {
+  const validatedConfig: GameConfig = { ...config };
+  
+  // Validate grid size
+  if (!validatedConfig.gridSize || validatedConfig.gridSize < MIN_GRID_SIZE || validatedConfig.gridSize > MAX_GRID_SIZE) {
+    validatedConfig.gridSize = DEFAULT_GRID_SIZE;
+  }
+
+  // Validate numbered dots count
+  const maxPossibleDots = validatedConfig.gridSize * validatedConfig.gridSize;
+  if (!validatedConfig.numberedDotsCount || 
+      validatedConfig.numberedDotsCount < MIN_DOTS_COUNT || 
+      validatedConfig.numberedDotsCount > Math.min(MAX_DOTS_COUNT, maxPossibleDots)) {
+    validatedConfig.numberedDotsCount = Math.min(DEFAULT_NUMBERED_DOTS_COUNT, maxPossibleDots);
+  }
+
+  // Validate difficulty
+  if (!validatedConfig.difficulty || !DIFFICULTY_SETTINGS[validatedConfig.difficulty]) {
+    validatedConfig.difficulty = 'medium';
+  }
+
+  return validatedConfig;
+};
 
 export const isAdjacent = (p1: Point, p2: Point): boolean => {
   const dx = Math.abs(p1.x - p2.x);
@@ -10,98 +45,123 @@ export const isAdjacent = (p1: Point, p2: Point): boolean => {
   return (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
 };
 
-export const generatePuzzle = (date: Date): GameState => {
-  const dateString = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-  const rng = seedrandom(dateString);
+export const generatePuzzle = (date: Date, config?: GameConfig): GameState => {
+  const validConfig = validateConfig(config);
+  const GRID_SIZE = validConfig.gridSize!;
+  const NUMBERED_DOTS_COUNT = validConfig.numberedDotsCount!;
+  const difficulty = DIFFICULTY_SETTINGS[validConfig.difficulty!];
+
+  // Use custom seed if provided, otherwise use date
+  const seedBase = validConfig.seed || 
+    `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}-${date.getHours()}`;
+  const rng = seedrandom(seedBase);
 
   // Initialize grid
   const grid: Point[][] = Array(GRID_SIZE).fill(null).map((_, y) =>
     Array(GRID_SIZE).fill(null).map((_, x) => ({ x, y }))
   );
 
-  // Generate numbered dots
-  const numberedDots: Point[] = [];
-  const usedPositions = new Set<string>();
-
-  // Helper to check if a point can be reached from the last point
-  const canReachPoint = (from: Point, to: Point, used: Set<string>): boolean => {
-    if (used.size === 0) return true;
-    
-    const queue: Point[] = [from];
-    const visited = new Set<string>();
-    visited.add(`${from.x},${from.y}`);
-
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      if (current.x === to.x && current.y === to.y) return true;
-
-      const neighbors = [
-        { x: current.x + 1, y: current.y },
-        { x: current.x - 1, y: current.y },
-        { x: current.x, y: current.y + 1 },
-        { x: current.x, y: current.y - 1 },
-      ];
-
-      for (const neighbor of neighbors) {
-        if (
-          neighbor.x >= 0 && neighbor.x < GRID_SIZE &&
-          neighbor.y >= 0 && neighbor.y < GRID_SIZE &&
-          !visited.has(`${neighbor.x},${neighbor.y}`) &&
-          !used.has(`${neighbor.x},${neighbor.y}`)
-        ) {
-          queue.push(neighbor);
-          visited.add(`${neighbor.x},${neighbor.y}`);
-        }
-      }
-    }
-
-    return false;
-  };
-
-  // Generate first point randomly
-  const firstPoint: Point = {
-    x: Math.floor(rng() * GRID_SIZE),
-    y: Math.floor(rng() * GRID_SIZE),
-    number: 1
-  };
-  numberedDots.push(firstPoint);
-  usedPositions.add(`${firstPoint.x},${firstPoint.y}`);
-  grid[firstPoint.y][firstPoint.x] = firstPoint;
-
-  // Generate remaining points ensuring they can be connected
-  for (let i = 1; i < NUMBERED_DOTS_COUNT; i++) {
-    let attempts = 0;
-    let found = false;
-
-    while (!found && attempts < 100) {
-      const x = Math.floor(rng() * GRID_SIZE);
-      const y = Math.floor(rng() * GRID_SIZE);
-      const posKey = `${x},${y}`;
-
-      if (!usedPositions.has(posKey)) {
-        const point: Point = { x, y, number: i + 1 };
-        if (canReachPoint(numberedDots[i - 1], point, usedPositions)) {
-          numberedDots.push(point);
-          usedPositions.add(posKey);
-          grid[y][x] = point;
-          found = true;
-        }
-      }
-      attempts++;
-    }
-
-    if (!found) {
-      // If we can't find a valid point, start over
-      return generatePuzzle(date);
+  // Generate all possible positions
+  const allPositions: Point[] = [];
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      allPositions.push({ x, y });
     }
   }
+
+  // Shuffle all positions
+  for (let i = allPositions.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [allPositions[i], allPositions[j]] = [allPositions[j], allPositions[i]];
+  }
+
+  // Try to generate a valid path
+  const generateValidPath = (): Point[] => {
+    const numberedDots: Point[] = [];
+    const usedPositions = new Set<string>();
+
+    // Update canReachPoint to consider difficulty
+    const canReachPoint = (from: Point, to: Point, used: Set<string>): boolean => {
+      if (used.size === 0) return true;
+      
+      // Check minimum distance requirement based on difficulty
+      const manhattanDistance = Math.abs(from.x - to.x) + Math.abs(from.y - to.y);
+      if (manhattanDistance < difficulty.minDistance) return false;
+      
+      const queue: Point[] = [from];
+      const visited = new Set<string>();
+      visited.add(`${from.x},${from.y}`);
+
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        if (current.x === to.x && current.y === to.y) return true;
+
+        const neighbors = [
+          { x: current.x + 1, y: current.y },
+          { x: current.x - 1, y: current.y },
+          { x: current.x, y: current.y + 1 },
+          { x: current.x, y: current.y - 1 },
+        ];
+
+        for (const neighbor of neighbors) {
+          const key = `${neighbor.x},${neighbor.y}`;
+          if (
+            neighbor.x >= 0 && neighbor.x < GRID_SIZE &&
+            neighbor.y >= 0 && neighbor.y < GRID_SIZE &&
+            !visited.has(key) &&
+            !used.has(key)
+          ) {
+            queue.push(neighbor);
+            visited.add(key);
+          }
+        }
+      }
+      return false;
+    };
+
+    // Try positions from the shuffled list
+    for (const pos of allPositions) {
+      if (numberedDots.length === 0) {
+        // First number
+        numberedDots.push({ ...pos, number: 1 });
+        usedPositions.add(`${pos.x},${pos.y}`);
+        continue;
+      }
+
+      const lastDot = numberedDots[numberedDots.length - 1];
+      const posKey = `${pos.x},${pos.y}`;
+
+      if (!usedPositions.has(posKey) && canReachPoint(lastDot, pos, usedPositions)) {
+        numberedDots.push({ ...pos, number: numberedDots.length + 1 });
+        usedPositions.add(posKey);
+
+        if (numberedDots.length === NUMBERED_DOTS_COUNT) {
+          return numberedDots;
+        }
+      }
+    }
+
+    return [];
+  };
+
+  // Try to generate a valid path, retry if failed
+  let numberedDots = generateValidPath();
+  while (numberedDots.length < NUMBERED_DOTS_COUNT) {
+    numberedDots = generateValidPath();
+  }
+
+  // Place numbered dots in the grid
+  numberedDots.forEach(dot => {
+    grid[dot.y][dot.x] = dot;
+  });
 
   return {
     grid,
     numberedDots,
     currentPath: [],
     isComplete: false,
-    moveCount: 0
+    moveCount: 0,
+    config: validConfig
   };
 };
 
