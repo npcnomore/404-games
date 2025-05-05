@@ -1,0 +1,16 @@
+{
+  "name": "Thread - Daily Puzzle Game",
+  "short_name": "Thread",
+  "description": "A daily puzzle game where you connect numbered dots in sequence",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366F1",
+  "icons": [
+    {
+      "src": "/thread.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+} 
