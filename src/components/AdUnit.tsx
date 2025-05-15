@@ -1,5 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Declare adsbygoogle on window object
+declare global {
+  interface Window {
+    adsbygoogle: any[];
+  }
+}
 
 interface AdUnitProps {
   isVisible: boolean;
@@ -7,6 +14,13 @@ interface AdUnitProps {
 }
 
 export const AdUnit: React.FC<AdUnitProps> = ({ isVisible, onClose }) => {
+  useEffect(() => {
+    if (isVisible) {
+      // Initialize the ad when the component becomes visible
+      (window.adsbygoogle = window.adsbygoogle || []).push({});
+    }
+  }, [isVisible]);
+
   return (
     <AnimatePresence>
       {isVisible && (
@@ -47,8 +61,8 @@ export const AdUnit: React.FC<AdUnitProps> = ({ isVisible, onClose }) => {
                   height: '100%',
                   minHeight: '300px'
                 }}
-                data-ad-client="ca-pub-2191121256242382"
-                data-ad-slot="5224103334"
+                data-ad-client="ca-pub-7253609224696658"
+                data-ad-slot="5304067023"
                 data-ad-format="auto"
                 data-full-width-responsive="true"
               />
